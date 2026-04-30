@@ -4,8 +4,35 @@ const app = express();
 const PORT = 8080;
 app.use("/app", middlewareMetricsInc, express.static("./src/app"));
 app.use(middlewareLogResponse);
-app.get("/healthz", handlerReadiness);
-app.get("/metrics", handlerMetrics);
+app.use(express.json());
+app.get("/api/healthz", handlerReadiness);
+app.get("/admin/metrics", handlerMetrics);
+app.post("/admin/reset", handlerReset);
+app.post("/api/validate_chirp", (req, res, next) => {
+    Promise.resolve(handlerValidateChirp(req, res)).catch(next);
+});
+app.use(middlewareUncaughtErrors);
+//////////////| Classes |////////////////////
+class NotFoundError extends Error {
+    constructor(message) {
+        super(message);
+    }
+}
+class ForbiddenError extends Error {
+    constructor(message) {
+        super(message);
+    }
+}
+class PermissionError extends Error {
+    constructor(message) {
+        super(message);
+    }
+}
+class BadRequestError extends Error {
+    constructor(message) {
+        super(message);
+    }
+}
 ////////////////| Middleware |//////////////////
 function middlewareLogResponse(req, res, next) {
     res.on("finish", () => {
@@ -20,17 +47,58 @@ function middlewareMetricsInc(req, res, next) {
     config.fileserverHits++;
     next();
 }
+function middlewareUncaughtErrors(err, req, res, next) {
+    console.log(err.message);
+    res.set("Content-Type", "application/json");
+    if (err instanceof BadRequestError) {
+        res.status(400);
+        res.send(JSON.stringify({ "error": err.message }));
+    }
+    else {
+        res.status(500);
+        res.send(JSON.stringify({ "error": "Something went wrong on our end" }));
+    }
+}
 //////////////| Handler Functions |///////////////
-function handlerReadiness(req, res) {
+async function handlerReadiness(req, res) {
     res.set("Content-Type", "text/plain; charset=utf-8");
     res.send("OK");
 }
-function handlerMetrics(req, res) {
-    res.set("Content-Type", "text/plain; charset=utf-8");
-    res.send(`Hits: ${config.fileserverHits}`);
+async function handlerMetrics(req, res) {
+    res.set("Content-Type", "text/html; charset=utf-8");
+    res.send(`<html>
+  <body>
+    <h1>Welcome, Chirpy Admin</h1>
+    <p>Chirpy has been visited ${config.fileserverHits} times!</p>
+  </body>
+</html>`);
 }
-function handlerReset(req, res) {
+async function handlerReset(req, res) {
     config.fileserverHits = 0;
+    res.set("Content-Type", "text/plain; charset=utf-8");
+    res.send(`Metrics Reset\n`);
+}
+async function handlerValidateChirp(req, res) {
+    res.set("Content-Type", "application/json; charset=utf-8");
+    //try {
+    const chirp = req.body; //JSON.parse(body);
+    if (chirp.body.length > 140) {
+        //res.status(400).send(JSON.stringify({ "error": "Chirp is too long" }));
+        throw new BadRequestError("Chirp is too long. Max length is 140");
+    }
+    const banned = ["kerfuffle", "sharbert", "fornax"];
+    const words = chirp.body.split(" ");
+    for (let i = 0; i < words.length; i++) {
+        if (banned.includes(words[i].toLowerCase())) {
+            words[i] = "****";
+        }
+    }
+    const cleaned = words.join(" ");
+    res.status(200).send(JSON.stringify({ "cleanedBody": cleaned }));
+    /*} catch (err) {
+        next(err);
+        //res.status(400).send(JSON.stringify({ "error": "Something went wrong" }));
+    }*/
 }
 ///////////////| Activate the Server |///////////////////
 app.listen(PORT, () => {
