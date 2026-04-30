@@ -1,13 +1,12 @@
 import express from "express";
+import { config } from "./config.js";
 const app = express();
 const PORT = 8080;
-app.use("/app", express.static("./src/app"));
+app.use("/app", middlewareMetricsInc, express.static("./src/app"));
 app.use(middlewareLogResponse);
 app.get("/healthz", handlerReadiness);
-function handlerReadiness(req, res) {
-    res.set("Content-Type", "text/plain; charset=utf-8");
-    res.send("OK");
-}
+app.get("/metrics", handlerMetrics);
+////////////////| Middleware |//////////////////
 function middlewareLogResponse(req, res, next) {
     res.on("finish", () => {
         const stat = res.statusCode;
@@ -17,6 +16,23 @@ function middlewareLogResponse(req, res, next) {
     });
     next();
 }
+function middlewareMetricsInc(req, res, next) {
+    config.fileserverHits++;
+    next();
+}
+//////////////| Handler Functions |///////////////
+function handlerReadiness(req, res) {
+    res.set("Content-Type", "text/plain; charset=utf-8");
+    res.send("OK");
+}
+function handlerMetrics(req, res) {
+    res.set("Content-Type", "text/plain; charset=utf-8");
+    res.send(`Hits: ${config.fileserverHits}`);
+}
+function handlerReset(req, res) {
+    config.fileserverHits = 0;
+}
+///////////////| Activate the Server |///////////////////
 app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);
 });

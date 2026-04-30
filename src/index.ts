@@ -1,22 +1,17 @@
-import express, { NextFunction } from "express";
-import { Request, Response } from "express";
+import express, { NextFunction, Request, Response } from "express";
+import { config } from "./config.js";
 
 
 const app = express();
 const PORT = 8080;
 
-app.use("/app", express.static("./src/app"));
+app.use("/app", middlewareMetricsInc, express.static("./src/app"));
 app.use(middlewareLogResponse)
 app.get("/healthz", handlerReadiness);
+app.get("/metrics", handlerMetrics)
 
 
-
-function handlerReadiness(req: Request, res: Response) {
-    res.set("Content-Type", "text/plain; charset=utf-8")
-    res.send("OK")
-
-}
-
+////////////////| Middleware |//////////////////
 
 function middlewareLogResponse(req: Request, res: Response, next: NextFunction) {
     res.on("finish", () => {
@@ -28,9 +23,35 @@ function middlewareLogResponse(req: Request, res: Response, next: NextFunction) 
     next()
 }
 
+function middlewareMetricsInc(req: Request, res: Response, next: NextFunction) {
+    config.fileserverHits++
+    next()
+}
+
+
+//////////////| Handler Functions |///////////////
+
+function handlerReadiness(req: Request, res: Response) {
+    res.set("Content-Type", "text/plain; charset=utf-8")
+    res.send("OK")
+
+}
+
+function handlerMetrics(req: Request, res: Response) {
+    res.set("Content-Type", "text/plain; charset=utf-8")
+    res.send(`Hits: ${config.fileserverHits}`)
+}
+
+function handlerReset(req: Request, res: Response) {
+    config.fileserverHits = 0
+}
 
 
 
+
+
+
+///////////////| Activate the Server |///////////////////
 
 app.listen(PORT, () => {
     console.log(`Server is running at http://localhost:${PORT}`);
