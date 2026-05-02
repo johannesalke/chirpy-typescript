@@ -13,6 +13,7 @@ export const users = pgTable("users", {
 
 export type NewUser = typeof users.$inferInsert;
 
+
 export const chirps = pgTable("chirps", {
     id: uuid("id").primaryKey().defaultRandom(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -26,3 +27,18 @@ export const chirps = pgTable("chirps", {
 
 export type NewChirp = typeof chirps.$inferInsert;
 
+
+export const refresh_tokens = pgTable("refresh_tokens", {
+    token: varchar("token", { length: 256 }).primaryKey().notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+        .notNull()
+        .defaultNow()
+        .$onUpdate(() => new Date()),
+
+    userId: uuid("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    revokedAt: timestamp("revoked_at")
+});
+
+export type NewRefreshToken = typeof refresh_tokens.$inferInsert;

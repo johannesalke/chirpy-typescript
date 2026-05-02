@@ -30,16 +30,10 @@ export function makeJWT(userID: string, expiresIn: number, secret: string): stri
 }
 
 export function validateJWT(token: string, secret: string): string {
-    try {
-        const payload = jwt.verify(token, secret)
-        return payload.sub as string
-    } catch (err) {
-        if (err instanceof jwt.TokenExpiredError) {
-            throw new Error("expired token")
-        } else {
-            throw err
-        }
-    }
+
+    const payload = jwt.verify(token, secret)
+    return payload.sub as string
+
 }
 
 export function getBearerToken(req: Request): string {
@@ -50,4 +44,9 @@ export function getBearerToken(req: Request): string {
         throw new Error("wrong auth type")
     }
     return authorization.split(" ")[1]
+}
+
+import { randomBytes } from "crypto";
+export function makeRefreshToken(): string {
+    return randomBytes(32).toString("hex")
 }

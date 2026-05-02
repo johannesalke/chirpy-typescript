@@ -16,18 +16,8 @@ export function makeJWT(userID, expiresIn, secret) {
     return signedToken;
 }
 export function validateJWT(token, secret) {
-    try {
-        const payload = jwt.verify(token, secret);
-        return payload.sub;
-    }
-    catch (err) {
-        if (err instanceof jwt.TokenExpiredError) {
-            throw new Error("expired token");
-        }
-        else {
-            throw err;
-        }
-    }
+    const payload = jwt.verify(token, secret);
+    return payload.sub;
 }
 export function getBearerToken(req) {
     const authorization = req.get("Authorization");
@@ -38,4 +28,8 @@ export function getBearerToken(req) {
         throw new Error("wrong auth type");
     }
     return authorization.split(" ")[1];
+}
+import { randomBytes } from "crypto";
+export function makeRefreshToken() {
+    return randomBytes(32).toString("hex");
 }

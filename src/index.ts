@@ -28,8 +28,17 @@ app.post("/admin/reset", handlerReset)
 app.post("/api/users", (req, res, next) => {
     Promise.resolve(handlerCreateUser(req, res)).catch(next);
 });
+app.put("/api/users", (req, res, next) => {
+    Promise.resolve(handlerUpdateUser(req, res)).catch(next);
+});
 app.post("/api/login", (req, res, next) => {
     Promise.resolve(handlerLogin(req, res)).catch(next);
+});
+app.post("/api/refresh", (req, res, next) => {
+    Promise.resolve(handlerRefresh(req, res)).catch(next);
+});
+app.post("/api/revoke", (req, res, next) => {
+    Promise.resolve(handlerRevokeRefreshtoken(req, res)).catch(next);
 });
 app.post("/api/chirps", (req, res, next) => {
     Promise.resolve(handlerCreateChirp(req, res)).catch(next);
@@ -40,6 +49,7 @@ app.get("/api/chirps", (req, res, next) => {
 app.get("/api/chirps/:chirpId", (req, res, next) => {
     Promise.resolve(handlerGetOneChirps(req, res)).catch(next);
 });
+
 
 
 
@@ -119,8 +129,8 @@ function middlewareUncaughtErrors(err: Error, req: Request, res: Response, next:
 
 //////////////| Handler Functions |///////////////
 
-import { createUser, getUserByEmail } from "./db/queries/users.js";
-import { NewChirp, NewUser } from "./db/schema.js";
+import { createUser, getUserByEmail, updateUser } from "./db/queries/users.js";
+import { NewChirp, NewRefreshToken, NewUser } from "./db/schema.js";
 import { UUID } from "node:crypto";
 import { createChirp, getAllChirps, getOneChirpByID } from "./db/queries/chirps.js";
 
@@ -142,7 +152,8 @@ async function handlerMetrics(req: Request, res: Response) {
 }
 
 import { resetTables } from "./db/queries/reset.js";
-import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, validateJWT } from "./auth.js";
+import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from "./auth.js";
+import { createreRefreshToken, getRefreshToken, revokeRefreshToken } from "./db/queries/refresh_tokens.js";
 async function handlerReset(req: Request, res: Response) {
     if (config.platform != "dev") {
         throw new ForbiddenError("This action is only permitted in a development environment")
@@ -187,15 +198,80 @@ async function handlerLogin(req: Request, res: Response) {
     const user = await getUserByEmail(body.email)
     const valid = await checkPasswordHash(body.password, user.hashedPassword)
     const jwt = makeJWT(user.id, body.expiresInSeconds, config.secret)
+    const refreshToken = makeRefreshToken()
     if (valid) {
         //user as object
         user.hashedPassword = "no"
-
-
-        respondWithJson(res, 200, { ...user, token: jwt })
+        //try {
+        const refreshTokenObj: NewRefreshToken = { token: refreshToken, userId: user.id, expiresAt: new Date(Date.now() + 5184000000) }
+        const tokenConfirm = await createreRefreshToken(refreshTokenObj)
+        console.log(tokenConfirm)
+        /*} catch (err) {
+            console.error("refresh token insert failed:", err);
+            throw err;
+        }*/
+        respondWithJson(res, 200, { ...user, token: jwt, refreshToken: tokenConfirm.token })
     } else {
         throw new PermissionError("incorrect email or password")
     }
+}
+
+async function handlerRefresh(req: Request, res: Response) {
+    console.log("=== refresh handler called ===");
+    const refreshToken = getBearerToken(req);
+    console.log("bearer:", refreshToken);
+    const token = await getRefreshToken(refreshToken);
+    console.log("token from DB:", token);
+
+    if (!token) {
+        throw new PermissionError("No such refreshToken known")
+        //return respondWithJson(res, 401, { error: "No such refreshToken known" })
+    }
+    if (token.revokedAt !== null) {
+        throw new PermissionError("Token has been revoked")
+        //return respondWithJson(res, 401, { error: "Token has been revoked" })
+    }
+    if (token.expiresAt.getTime() <= new Date(Date.now()).getTime()) {
+        throw new PermissionError("Token has expired")
+        //return respondWithJson(res, 401, { error: "Token has expired" })
+    }
+    try {
+        const jwt = makeJWT(token.userId, 3600, config.secret)
+        console.log("about to respond 200");
+        respondWithJson(res, 200, { token: jwt })
+        console.log("responded 200");
+    } catch (err) {
+        throw err
+    }
+
+}
+
+async function handlerUpdateUser(req: Request, res: Response) {
+    let userId
+    try {
+        const jwt = getBearerToken(req)
+
+
+        userId = validateJWT(jwt, config.secret)
+    } catch (err) {
+        throw new PermissionError("Token malformed or missing")
+    }
+    const parameters = req.body
+    const hash = await hashPassword(parameters.password)
+    const newUserInfo = await updateUser(userId, parameters.email, hash)
+    newUserInfo.hashedPassword = ""
+    return respondWithJson(res, 200, newUserInfo)
+}
+
+
+
+async function handlerRevokeRefreshtoken(req: Request, res: Response) {
+    //const params = req.body
+    const refreshToken = getBearerToken(req)
+    const token = await revokeRefreshToken(refreshToken)
+    console.log("Revoked roken?:", token)
+    res.sendStatus(204)
+
 }
 
 
@@ -216,6 +292,7 @@ async function handlerCreateChirp(req: Request, res: Response) {
     if (chirp.body.length > 140) {
         //res.status(400).send(JSON.stringify({ "error": "Chirp is too long" }));
         throw new BadRequestError("Chirp is too long. Max length is 140")
+        return
     }
     const banned = ["kerfuffle", "sharbert", "fornax"];
     const words = chirp.body.split(" ");
@@ -232,6 +309,7 @@ async function handlerCreateChirp(req: Request, res: Response) {
     const result = await createChirp(chirp)
 
     respondWithJson(res, 201, result)
+    return
 
 }
 
@@ -253,7 +331,9 @@ async function handlerGetOneChirps(req: Request, res: Response) {
 
 }
 
+async function handlerDeleteChirp(req: Request, res: Response) {
 
+}
 
 ////////////////| Helper FUnctions |/////////////
 

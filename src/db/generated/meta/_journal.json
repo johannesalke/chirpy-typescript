@@ -22,6 +22,20 @@
       "when": 1777663397777,
       "tag": "0002_misty_mentor",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777741013073,
+      "tag": "0003_solid_masque",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777741447577,
+      "tag": "0004_simple_malice",
+      "breakpoints": true
     }
   ]
 }
