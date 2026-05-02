@@ -29,6 +29,16 @@ export function getBearerToken(req) {
     }
     return authorization.split(" ")[1];
 }
+export function getAPIKey(req) {
+    const authorization = req.get("Authorization");
+    if (authorization == null) {
+        throw new Error("no api key");
+    }
+    else if (authorization.split(" ")[0] != "ApiKey") {
+        throw new Error("wrong auth type");
+    }
+    return authorization.split(" ")[1];
+}
 import { randomBytes } from "crypto";
 export function makeRefreshToken() {
     return randomBytes(32).toString("hex");

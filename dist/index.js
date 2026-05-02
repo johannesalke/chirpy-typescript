@@ -35,7 +35,13 @@ app.get("/api/chirps", (req, res, next) => {
     Promise.resolve(handlerGetAllChirps(req, res)).catch(next);
 });
 app.get("/api/chirps/:chirpId", (req, res, next) => {
-    Promise.resolve(handlerGetOneChirps(req, res)).catch(next);
+    Promise.resolve(handlerGetOneChirp(req, res)).catch(next);
+});
+app.delete("/api/chirps/:chirpId", (req, res, next) => {
+    Promise.resolve(handlerDeleteChirp(req, res)).catch(next);
+});
+app.post("/api/polka/webhooks", (req, res, next) => {
+    Promise.resolve(handlerPolkaWebhooks(req, res)).catch(next);
 });
 app.use(middlewareUncaughtErrors);
 //////////////| Classes |////////////////////
@@ -98,8 +104,8 @@ function middlewareUncaughtErrors(err, req, res, next) {
     }
 }
 //////////////| Handler Functions |///////////////
-import { createUser, getUserByEmail, updateUser } from "./db/queries/users.js";
-import { createChirp, getAllChirps, getOneChirpByID } from "./db/queries/chirps.js";
+import { createUser, getUserByEmail, updateUser, upgradeUserRed } from "./db/queries/users.js";
+import { createChirp, deleteChirp, getAllChirps, getOneChirpByID } from "./db/queries/chirps.js";
 async function handlerReadiness(req, res) {
     res.set("Content-Type", "text/plain; charset=utf-8");
     res.send("OK");
@@ -114,7 +120,7 @@ async function handlerMetrics(req, res) {
 </html>`);
 }
 import { resetTables } from "./db/queries/reset.js";
-import { checkPasswordHash, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from "./auth.js";
+import { checkPasswordHash, getAPIKey, getBearerToken, hashPassword, makeJWT, makeRefreshToken, validateJWT } from "./auth.js";
 import { createreRefreshToken, getRefreshToken, revokeRefreshToken } from "./db/queries/refresh_tokens.js";
 async function handlerReset(req, res) {
     if (config.platform != "dev") {
@@ -256,18 +262,74 @@ async function handlerCreateChirp(req, res) {
     return;
 }
 async function handlerGetAllChirps(req, res) {
-    const chirps = await getAllChirps();
-    console.log(chirps);
+    let authorId = "";
+    let authorIdQuery = req.query.authorId;
+    if (typeof authorIdQuery === "string") {
+        authorId = authorIdQuery;
+    }
+    //const chirps= await getChirpsByAuthor(authorId)
+    const chirps = await getAllChirps(authorId);
+    let querySort = req.query.sort;
+    if (querySort === "desc") {
+        chirps.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    }
+    else {
+        chirps.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    }
+    //console.log(chirps)
     respondWithJson(res, 200, chirps);
 }
-async function handlerGetOneChirps(req, res) {
-    console.log(req.params);
+async function handlerGetOneChirp(req, res) {
+    //console.log(req.params)
     let chirp_id = req.params["chirpId"];
     const chirp = await getOneChirpByID(chirp_id);
     if (!chirp) {
         throw new NotFoundError("No such chirp");
     }
     respondWithJson(res, 200, chirp);
+}
+async function handlerDeleteChirp(req, res) {
+    let userId;
+    try {
+        const jwt = getBearerToken(req);
+        userId = validateJWT(jwt, config.secret);
+    }
+    catch (err) {
+        throw new PermissionError("Token malformed or missing");
+    }
+    let chirp_id = req.params["chirpId"];
+    const chirp = await getOneChirpByID(chirp_id);
+    if (!chirp) {
+        throw new NotFoundError("No such chirp");
+    }
+    if (chirp.userId != userId) {
+        throw new ForbiddenError("Can not delete chirp of another user");
+    }
+    deleteChirp(chirp_id);
+    res.sendStatus(204);
+}
+async function handlerPolkaWebhooks(req, res) {
+    const params = req.body;
+    try {
+        if (getAPIKey(req) != config.polkaKey) {
+            res.sendStatus(401);
+        }
+    }
+    catch (err) {
+        throw new PermissionError("Malformed or incorrect API key");
+    }
+    switch (params.event) {
+        case "user.upgraded":
+            const user = await upgradeUserRed(params.data.userId);
+            if (!user) {
+                throw new NotFoundError("User not found");
+            }
+            res.sendStatus(204);
+            return;
+        default:
+            res.sendStatus(204);
+            return;
+    }
 }
 ////////////////| Helper FUnctions |/////////////
 function respondWithJson(res, statuscode, body) {

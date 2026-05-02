@@ -36,6 +36,13 @@
       "when": 1777741447577,
       "tag": "0004_simple_malice",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777748039116,
+      "tag": "0005_conscious_black_crow",
+      "breakpoints": true
     }
   ]
 }

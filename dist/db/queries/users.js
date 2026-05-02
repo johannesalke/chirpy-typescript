@@ -34,3 +34,13 @@ export async function updateUser(id, email, hash) {
         .returning();
     return result;
 }
+export async function upgradeUserRed(id) {
+    const [result] = await db
+        .update(users)
+        .set({
+        isChirpyRed: true
+    })
+        .where(eq(users.id, id))
+        .returning();
+    return result;
+}

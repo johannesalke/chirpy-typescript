@@ -7,6 +7,7 @@ export const config = {
     fileserverHits: 0,
     platform: envOrThrow("PLATFORM"),
     secret: envOrThrow("SECRET"),
+    polkaKey: envOrThrow("POLKA_KEY"),
     db: {
         url: dbURL,
         migrationConfig: migrationConfig

@@ -9,6 +9,7 @@ type APIConfig = {
     fileserverHits: number;
     platform: string;
     secret: string;
+    polkaKey: string;
     db: {
         url: string;
         migrationConfig: MigrationConfig;
@@ -26,6 +27,7 @@ export const config: APIConfig = {
     fileserverHits: 0,
     platform: envOrThrow("PLATFORM"),
     secret: envOrThrow("SECRET"),
+    polkaKey: envOrThrow("POLKA_KEY"),
     db: {
         url: dbURL,
         migrationConfig: migrationConfig
